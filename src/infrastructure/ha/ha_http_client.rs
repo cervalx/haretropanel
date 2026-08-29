@@ -97,6 +97,11 @@ impl HaHttpClient {
 
         let is_on = Self::is_on_state(&kind, &ha.state);
         let value = Self::build_value(&kind, &ha.state, &ha);
+        let brightness = if matches!(kind, EntityKind::Light) {
+            ha.attributes.brightness
+        } else {
+            None
+        };
 
         Entity {
             id: EntityId(ha.entity_id),
@@ -104,6 +109,7 @@ impl HaHttpClient {
             kind,
             is_on,
             value,
+            brightness,
         }
     }
 
@@ -181,6 +187,22 @@ impl HomeAssistantClient for HaHttpClient {
         let body = serde_json::json!({ "entity_id": id_str });
 
         self.call_service(domain, "toggle", body).await
+    }
+
+    async fn set_brightness(&self, entity_id: &EntityId, brightness_pct: u8) -> AppResult<()> {
+        if !entity_id.0.starts_with("light.") {
+            return Err(AppError::Internal(format!(
+                "set_brightness called with non-light entity_id: {}",
+                entity_id.0
+            )));
+        }
+
+        let body = serde_json::json!({
+            "entity_id": entity_id.0,
+            "brightness_pct": brightness_pct,
+        });
+
+        self.call_service("light", "turn_on", body).await
     }
 
     async fn run_script(&self, entity_id: &EntityId) -> AppResult<()> {

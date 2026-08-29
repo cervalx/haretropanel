@@ -9,5 +9,6 @@ use crate::{
 pub trait HomeAssistantClient: Send + Sync {
     async fn fetch_dashboard_state(&self) -> AppResult<DashboardState>;
     async fn toggle(&self, entity_id: &EntityId) -> AppResult<()>;
+    async fn set_brightness(&self, entity_id: &EntityId, brightness_pct: u8) -> AppResult<()>;
     async fn run_script(&self, entity_id: &EntityId) -> AppResult<()>;
 }

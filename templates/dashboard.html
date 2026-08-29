@@ -35,15 +35,15 @@
 
 <div class="grid">
     {% for entity in entities %}
-    <div class="card">
+    <div class="card" data-entity-id="{{ entity.id }}">
         <h2 class="card-title">{{ entity.name }}</h2>
 
         <p class="card-meta">Type: {{ entity.kind_label }}</p>
 
         {% if entity.has_value %}
-        <p class="card-value">Value: {{ entity.value }}</p>
+        <p class="card-value" data-value>Value: {{ entity.value }}</p>
         {% else %}
-        <p class="card-value">
+        <p class="card-value" data-value>
             Value:
             {% if entity.is_on %}on{% else %}off{% endif %}
         </p>
@@ -58,6 +58,23 @@
         </form>
         {% endif %}
 
+        {% if let Some(brightness_pct) = entity.brightness_pct %}
+        <form method="post" action="/brightness" style="margin-top: 0.5rem;" data-brightness-form>
+            <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <label for="brightness-{{ entity.id }}" data-brightness-label>Brightness: {{ brightness_pct }}%</label>
+            <input
+                id="brightness-{{ entity.id }}"
+                data-brightness-input
+                type="range"
+                name="brightness_pct"
+                min="0"
+                max="100"
+                value="{{ brightness_pct }}"
+                style="width: 100%;"
+            >
+        </form>
+        {% endif %}
+
         {% if entity.can_run_script %}
         <form method="post" action="/run_script" style="margin-top: 0.5rem;">
             <input type="hidden" name="entity_id" value="{{ entity.id }}">
@@ -69,4 +86,63 @@
     </div>
     {% endfor %}
 </div>
+
+<script>
+    (() => {
+        const cards = new Map(
+            [...document.querySelectorAll('[data-entity-id]')]
+                .map((card) => [card.dataset.entityId, card])
+        );
+        const socketUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?page={{ current_page }}`;
+        let reconnectTimer;
+
+        document.querySelectorAll('[data-brightness-form]').forEach((form) => {
+            const input = form.querySelector('[data-brightness-input]');
+            const label = form.querySelector('[data-brightness-label]');
+
+            input.addEventListener('input', () => {
+                label.textContent = `Brightness: ${input.value}%`;
+            });
+            input.addEventListener('change', () => {
+                form.requestSubmit();
+            });
+        });
+
+        function connect() {
+            const socket = new WebSocket(socketUrl);
+
+            socket.onmessage = (event) => {
+                const dashboard = JSON.parse(event.data);
+
+                dashboard.entities.forEach((entity) => {
+                    const card = cards.get(entity.id);
+                    if (!card) return;
+
+                    const value = card.querySelector('[data-value]');
+                    value.textContent = entity.has_value
+                        ? `Value: ${entity.value}`
+                        : `Value: ${entity.is_on ? 'on' : 'off'}`;
+
+                    if (entity.brightness_pct !== null) {
+                        const label = card.querySelector('[data-brightness-label]');
+                        const input = card.querySelector('[data-brightness-input]');
+                        if (label) label.textContent = `Brightness: ${entity.brightness_pct}%`;
+                        if (input && document.activeElement !== input) {
+                            input.value = entity.brightness_pct;
+                        }
+                    }
+                });
+            };
+
+            socket.onclose = () => {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = setTimeout(connect, 3000);
+            };
+
+            socket.onerror = () => socket.close();
+        }
+
+        connect();
+    })();
+</script>
 {% endblock %}

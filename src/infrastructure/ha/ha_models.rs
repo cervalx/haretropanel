@@ -16,4 +16,7 @@ pub struct HaAttributes {
 
     #[serde(default)]
     pub unit_of_measurement: Option<String>,
+
+    #[serde(default)]
+    pub brightness: Option<u8>,
 }

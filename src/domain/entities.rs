@@ -18,6 +18,7 @@ pub struct Entity {
     pub kind: EntityKind,
     pub is_on: bool,
     pub value: Option<String>,
+    pub brightness: Option<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

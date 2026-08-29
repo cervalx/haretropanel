@@ -175,6 +175,12 @@ impl DashboardService {
         Ok(())
     }
 
+    pub async fn set_brightness(&self, id: &EntityId, brightness_pct: u8) -> AppResult<()> {
+        self.ha_client.set_brightness(id, brightness_pct).await?;
+        self.invalidate_cache().await;
+        Ok(())
+    }
+
     pub async fn run_script(&self, id: &EntityId) -> AppResult<()> {
         self.ha_client.run_script(id).await?;
         self.invalidate_cache().await;

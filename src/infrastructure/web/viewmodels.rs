@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use askama::Template;
+use serde::Serialize;
 
 use crate::domain::{DashboardState, Entity, EntityKind};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct EntityViewModel {
     pub id: String,
     pub name: String,
@@ -13,6 +14,7 @@ pub struct EntityViewModel {
     pub has_value: bool,
     pub value: String,
     pub can_toggle: bool,
+    pub brightness_pct: Option<u8>,
     pub can_run_script: bool,
 }
 
@@ -34,6 +36,7 @@ impl From<&Entity> for EntityViewModel {
         };
 
         let can_toggle = matches!(e.kind, EntityKind::Light | EntityKind::Switch);
+        let brightness_pct = e.brightness.map(|value| ((value as u16 * 100 + 127) / 255) as u8);
         let can_run_script = matches!(e.kind, EntityKind::Script);
 
         Self {
@@ -44,11 +47,13 @@ impl From<&Entity> for EntityViewModel {
             has_value,
             value,
             can_toggle,
+            brightness_pct,
             can_run_script,
         }
     }
 }
 
+#[derive(Serialize)]
 pub struct DashboardPageViewModel {
     pub entities: Vec<EntityViewModel>,
     pub current_page: usize,
