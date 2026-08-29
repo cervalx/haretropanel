@@ -103,6 +103,30 @@ impl HaHttpClient {
             None
         };
 
+        let color_temp_kelvin = if matches!(kind, EntityKind::Light) {
+            ha.attributes.color_temp_kelvin
+        } else {
+            None
+        };
+
+        let min_color_temp_kelvin = if matches!(kind, EntityKind::Light) {
+            ha.attributes.min_color_temp_kelvin
+        } else {
+            None
+        };
+
+        let max_color_temp_kelvin = if matches!(kind, EntityKind::Light) {
+            ha.attributes.max_color_temp_kelvin
+        } else {
+            None
+        };
+
+        let rgb_color = if matches!(kind, EntityKind::Light) {
+            ha.attributes.rgb_color
+        } else {
+            None
+        };
+
         Entity {
             id: EntityId(ha.entity_id),
             name,
@@ -110,6 +134,10 @@ impl HaHttpClient {
             is_on,
             value,
             brightness,
+            color_temp_kelvin,
+            min_color_temp_kelvin,
+            max_color_temp_kelvin,
+            rgb_color,
         }
     }
 
@@ -200,6 +228,38 @@ impl HomeAssistantClient for HaHttpClient {
         let body = serde_json::json!({
             "entity_id": entity_id.0,
             "brightness_pct": brightness_pct,
+        });
+
+        self.call_service("light", "turn_on", body).await
+    }
+
+    async fn set_color_temp(&self, entity_id: &EntityId, color_temp_kelvin: u16) -> AppResult<()> {
+        if !entity_id.0.starts_with("light.") {
+            return Err(AppError::Internal(format!(
+                "set_color_temp called with non-light entity_id: {}",
+                entity_id.0
+            )));
+        }
+
+        let body = serde_json::json!({
+            "entity_id": entity_id.0,
+            "color_temp_kelvin": color_temp_kelvin,
+        });
+
+        self.call_service("light", "turn_on", body).await
+    }
+
+    async fn set_color(&self, entity_id: &EntityId, rgb: [u8; 3]) -> AppResult<()> {
+        if !entity_id.0.starts_with("light.") {
+            return Err(AppError::Internal(format!(
+                "set_color called with non-light entity_id: {}",
+                entity_id.0
+            )));
+        }
+
+        let body = serde_json::json!({
+            "entity_id": entity_id.0,
+            "rgb_color": [rgb[0], rgb[1], rgb[2]],
         });
 
         self.call_service("light", "turn_on", body).await

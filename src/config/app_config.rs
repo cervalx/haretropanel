@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub server_port: u16,
     pub ha_base_url: String,
     pub ha_token: Option<String>,
+    pub app_title: String,
 
     // logging
     pub log_dir: String,
@@ -41,6 +42,9 @@ impl AppConfig {
             .unwrap_or_else(|_| "http://localhost:8123".to_string());
 
         let ha_token = env::var("HA_TOKEN").ok();
+
+        let app_title = env::var("HARETROPANEL_TITLE")
+            .unwrap_or_else(|_| "HARetroPanel - Home Assistant panel".to_string());
 
         let log_dir = env::var("HARETROPANEL_LOG_DIR")
             .unwrap_or_else(|_| "./logs".to_string());
@@ -95,6 +99,7 @@ impl AppConfig {
             server_port,
             ha_base_url,
             ha_token,
+            app_title,
             log_dir,
             log_rotation,
             log_level,
@@ -104,5 +109,24 @@ impl AppConfig {
             dashboard_cache_ttl_sensor_secs,
             dashboard_cache_ttl_climate_secs,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_title_respects_environment_override() {
+        let previous = std::env::var("HARETROPANEL_TITLE").ok();
+        std::env::set_var("HARETROPANEL_TITLE", "My Custom Title");
+
+        let config = AppConfig::from_env().unwrap();
+        assert_eq!(config.app_title, "My Custom Title");
+
+        match previous {
+            Some(value) => std::env::set_var("HARETROPANEL_TITLE", value),
+            None => std::env::remove_var("HARETROPANEL_TITLE"),
+        }
     }
 }

@@ -39,6 +39,18 @@ pub struct RunScriptForm {
     pub entity_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ColorTempForm {
+    pub entity_id: String,
+    pub color_temp_kelvin: u16,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ColorForm {
+    pub entity_id: String,
+    pub rgb: String,
+}
+
 pub async fn get_dashboard(
     State(state): State<AppState>,
     Query(query): Query<DashboardQuery>,
@@ -56,6 +68,7 @@ pub async fn get_dashboard(
         DashboardPageViewModel::from_state_and_pages(dashboard_state, &entity_pages, requested_page);
 
     let template = DashboardTemplate {
+        app_title: &state.app_title,
         entities: &vm.entities,
         current_page: vm.current_page,
         total_pages: vm.total_pages,
@@ -114,6 +127,53 @@ async fn serve_dashboard_websocket(
             }
         }
     }
+}
+
+pub async fn post_set_color_temp(
+    State(state): State<AppState>,
+    Form(form): Form<ColorTempForm>,
+) -> AppResult<impl IntoResponse> {
+    let id = EntityId(form.entity_id.clone());
+    info!(
+        "Setting color temperature via POST /light/color_temp: {} to {}K",
+        id.0,
+        form.color_temp_kelvin
+    );
+    state
+        .dashboard_service
+        .set_color_temp(&id, form.color_temp_kelvin)
+        .await?;
+    Ok(Redirect::to("/"))
+}
+
+pub async fn post_set_color(
+    State(state): State<AppState>,
+    Form(form): Form<ColorForm>,
+) -> AppResult<impl IntoResponse> {
+    let id = EntityId(form.entity_id.clone());
+    let rgb = parse_hex_color(&form.rgb)?;
+    info!("Setting color via POST /light/color: {} to #{:02x}{:02x}{:02x}", id.0, rgb[0], rgb[1], rgb[2]);
+    state.dashboard_service.set_color(&id, rgb).await?;
+    Ok(Redirect::to("/"))
+}
+
+fn parse_hex_color(raw: &str) -> AppResult<[u8; 3]> {
+    let value = raw.trim();
+    let without_hash = value.strip_prefix('#').unwrap_or(value);
+    if without_hash.len() != 6 {
+        return Err(crate::shared::error::AppError::Internal(format!(
+            "Invalid color value: {raw}"
+        )));
+    }
+
+    let r = u8::from_str_radix(&without_hash[0..2], 16)
+        .map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid color value {raw}: {e}")))?;
+    let g = u8::from_str_radix(&without_hash[2..4], 16)
+        .map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid color value {raw}: {e}")))?;
+    let b = u8::from_str_radix(&without_hash[4..6], 16)
+        .map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid color value {raw}: {e}")))?;
+
+    Ok([r, g, b])
 }
 
 pub async fn post_toggle(

@@ -181,6 +181,18 @@ impl DashboardService {
         Ok(())
     }
 
+    pub async fn set_color_temp(&self, id: &EntityId, color_temp_kelvin: u16) -> AppResult<()> {
+        self.ha_client.set_color_temp(id, color_temp_kelvin).await?;
+        self.invalidate_cache().await;
+        Ok(())
+    }
+
+    pub async fn set_color(&self, id: &EntityId, rgb: [u8; 3]) -> AppResult<()> {
+        self.ha_client.set_color(id, rgb).await?;
+        self.invalidate_cache().await;
+        Ok(())
+    }
+
     pub async fn run_script(&self, id: &EntityId) -> AppResult<()> {
         self.ha_client.run_script(id).await?;
         self.invalidate_cache().await;

@@ -32,7 +32,10 @@ pub async fn run(config: AppConfig) -> AppResult<()> {
     let dashboard_service =
         Arc::new(DashboardService::new(ha_client, layout_repo, cache_config));
 
-    let state = AppState { dashboard_service };
+    let state = AppState {
+        dashboard_service,
+        app_title: config.app_title.clone(),
+    };
 
     let app = build_router(state);
 

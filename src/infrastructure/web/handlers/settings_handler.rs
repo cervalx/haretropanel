@@ -46,6 +46,7 @@ pub async fn get_entity_settings(
     let vm = EntitiesSettingsPageViewModel { entities };
 
     let template = EntitiesSettingsTemplate {
+        app_title: &state.app_title,
         entities: &vm.entities,
     };
 

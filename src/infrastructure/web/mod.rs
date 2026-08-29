@@ -10,6 +10,7 @@ use crate::application::services::DashboardService;
 #[derive(Clone)]
 pub struct AppState {
     pub dashboard_service: Arc<DashboardService>,
+    pub app_title: String,
 }
 
 // Re-export router builder for convenient use in bootstrap

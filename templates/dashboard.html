@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}HARetroPanel - Home Assistant panel{% endblock %}
+{% block title %}{{ app_title }}{% endblock %}
 
 {% block content %}
 <div class="toolbar">
-    <h1>HARetroPanel - Home Assistant panel</h1>
+    <h1>{{ app_title }}</h1>
     <div class="toolbar-actions">
         <a href="/?page={{ current_page }}&force_refresh=1" class="toolbar-link">
             Refresh
@@ -75,6 +75,46 @@
         </form>
         {% endif %}
 
+        {% if entity.supports_color_temp %}
+        <form method="post" action="/light/color_temp" style="margin-top: 0.5rem;" data-color-temp-form>
+            <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <label for="color-temp-{{ entity.id }}" data-color-temp-label>
+                Color temp: {{ entity.color_temp_kelvin.unwrap_or(entity.min_color_temp_kelvin.unwrap_or(2500)) }}K
+            </label>
+            <input
+                id="color-temp-{{ entity.id }}"
+                data-color-temp-input
+                type="range"
+                name="color_temp_kelvin"
+                min="{{ entity.min_color_temp_kelvin.unwrap_or(2000) }}"
+                max="{{ entity.max_color_temp_kelvin.unwrap_or(6500) }}"
+                value="{{ entity.color_temp_kelvin.unwrap_or(entity.min_color_temp_kelvin.unwrap_or(2500)) }}"
+                style="width: 100%;"
+            >
+        </form>
+        {% endif %}
+
+        {% if entity.supports_rgb %}
+        <form method="post" action="/light/color" style="margin-top: 0.75rem;" data-color-form hidden>
+            <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <input type="hidden" name="rgb" data-color-value value="{{ entity.rgb_hex }}">
+            <div class="color-picker-wrap" data-color-picker data-entity-id="{{ entity.id }}">
+                <canvas
+                    width="260"
+                    height="260"
+                    data-color-wheel
+                    aria-label="Choose color"
+                    role="img"
+                    style="display: block; width: 100%; max-width: 260px; height: auto; cursor: crosshair; border-radius: 50%;"
+                ></canvas>
+                <div class="color-picker-handle" data-color-handle aria-hidden="true"></div>
+            </div>
+        </form>
+        <button type="button" class="btn color-toggle-btn" data-color-toggle>
+            Change Color
+        </button>
+        {% endif %}
+
         {% if entity.can_run_script %}
         <form method="post" action="/run_script" style="margin-top: 0.5rem;">
             <input type="hidden" name="entity_id" value="{{ entity.id }}">
@@ -106,6 +146,190 @@
             input.addEventListener('change', () => {
                 form.requestSubmit();
             });
+        });
+
+        document.querySelectorAll('[data-color-temp-form]').forEach((form) => {
+            const input = form.querySelector('[data-color-temp-input]');
+            const label = form.querySelector('[data-color-temp-label]');
+
+            input.addEventListener('input', () => {
+                label.textContent = `Color temp: ${input.value}K`;
+            });
+            input.addEventListener('change', () => {
+                form.requestSubmit();
+            });
+        });
+
+        function hsvToRgb(h, s, v) {
+            const c = v * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = v - c;
+
+            let r = 0;
+            let g = 0;
+            let b = 0;
+
+            if (h >= 0 && h < 60) [r, g, b] = [c, x, 0];
+            else if (h >= 60 && h < 120) [r, g, b] = [x, c, 0];
+            else if (h >= 120 && h < 180) [r, g, b] = [0, c, x];
+            else if (h >= 180 && h < 240) [r, g, b] = [0, x, c];
+            else if (h >= 240 && h < 300) [r, g, b] = [x, 0, c];
+            else [r, g, b] = [c, 0, x];
+
+            return [r, g, b].map((value) => Math.round((value + m) * 255));
+        }
+
+        function rgbToHex(rgb) {
+            return `#${rgb.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+        }
+
+        function hexToRgb(hex) {
+            const clean = hex.replace('#', '');
+            const value = clean.length === 3
+                ? clean.split('').map((char) => char + char).join('')
+                : clean;
+            const num = Number.parseInt(value, 16);
+            return [
+                (num >> 16) & 255,
+                (num >> 8) & 255,
+                num & 255,
+            ];
+        }
+
+        function setColorValue(form, rgb) {
+            const valueInput = form.querySelector('[data-color-value]');
+            const hex = rgbToHex(rgb);
+            valueInput.value = hex;
+
+            const handle = form.querySelector('[data-color-handle]');
+            const canvas = form.querySelector('[data-color-wheel]');
+            if (!canvas || !handle) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const max = Math.max(rgb[0], rgb[1], rgb[2]);
+            const min = Math.min(rgb[0], rgb[1], rgb[2]);
+            const delta = max - min;
+
+            let hue = 0;
+            if (delta !== 0) {
+                if (max === rgb[0]) hue = 60 * (((rgb[1] - rgb[2]) / delta) % 6);
+                else if (max === rgb[1]) hue = 60 * (((rgb[2] - rgb[0]) / delta) + 2);
+                else hue = 60 * (((rgb[0] - rgb[1]) / delta) + 4);
+            }
+
+            const saturation = max === 0 ? 0 : delta / max;
+            const angle = ((hue - 90) * Math.PI) / 180;
+            const radius = (Math.min(rect.width, rect.height) / 2) * saturation;
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+
+            handle.style.left = `${(x / rect.width) * 100}%`;
+            handle.style.top = `${(y / rect.height) * 100}%`;
+        }
+
+        function renderColorWheel(canvas) {
+            const ctx = canvas.getContext('2d');
+            const size = canvas.width;
+            const radius = size / 2;
+            const image = ctx.createImageData(size, size);
+            const data = image.data;
+
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const dx = x - radius;
+                    const dy = y - radius;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance <= radius) {
+                        const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360 + 90) % 360;
+                        const saturation = Math.min(distance / radius, 1);
+                        const [r, g, b] = hsvToRgb(hue, saturation, 1);
+                        const index = (y * size + x) * 4;
+                        data[index] = r;
+                        data[index + 1] = g;
+                        data[index + 2] = b;
+                        data[index + 3] = 255;
+                    }
+                }
+            }
+
+            ctx.putImageData(image, 0, 0);
+        }
+
+        function bindColorPicker(form) {
+            const canvas = form.querySelector('[data-color-wheel]');
+            const handle = form.querySelector('[data-color-handle]');
+            const valueInput = form.querySelector('[data-color-value]');
+            if (!canvas || !handle || !valueInput) return;
+
+            renderColorWheel(canvas);
+            let isDragging = false;
+
+            const updateFromPointer = (event) => {
+                const rect = canvas.getBoundingClientRect();
+                const cx = rect.width / 2;
+                const cy = rect.height / 2;
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                const dx = x - cx;
+                const dy = y - cy;
+                const distance = Math.min(Math.sqrt(dx * dx + dy * dy), cx);
+                const angle = Math.atan2(dy, dx);
+                const hue = ((angle * 180 / Math.PI) + 450) % 360;
+                const saturation = Math.min(distance / cx, 1);
+                const rgb = hsvToRgb(hue, saturation, 1);
+                valueInput.value = rgbToHex(rgb);
+
+                const handleX = cx + Math.cos(angle) * distance;
+                const handleY = cy + Math.sin(angle) * distance;
+                handle.style.left = `${(handleX / rect.width) * 100}%`;
+                handle.style.top = `${(handleY / rect.height) * 100}%`;
+            };
+
+            canvas.addEventListener('pointerdown', (event) => {
+                isDragging = true;
+                canvas.setPointerCapture(event.pointerId);
+                updateFromPointer(event);
+            });
+            canvas.addEventListener('pointermove', (event) => {
+                if (isDragging) {
+                    updateFromPointer(event);
+                }
+            });
+            canvas.addEventListener('pointerup', (event) => {
+                isDragging = false;
+                if (canvas.hasPointerCapture(event.pointerId)) {
+                    canvas.releasePointerCapture(event.pointerId);
+                }
+                if (valueInput.value) {
+                    form.submit();
+                }
+            });
+            canvas.addEventListener('pointerleave', () => { isDragging = false; });
+            canvas.addEventListener('pointercancel', (event) => {
+                isDragging = false;
+                if (canvas.hasPointerCapture(event.pointerId)) {
+                    canvas.releasePointerCapture(event.pointerId);
+                }
+            });
+
+            const initialHex = valueInput.value || '#ffffff';
+            setColorValue(form, hexToRgb(initialHex));
+        }
+
+        document.querySelectorAll('[data-color-form]').forEach((form) => {
+            bindColorPicker(form);
+
+            const toggle = form.parentElement.querySelector('[data-color-toggle]');
+            if (toggle) {
+                toggle.addEventListener('click', () => {
+                    const isHidden = form.hidden;
+                    form.hidden = !isHidden;
+                    toggle.textContent = isHidden ? 'Hide Color Picker' : 'Change Color';
+                });
+            }
         });
 
         function connect() {
