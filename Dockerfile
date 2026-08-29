@@ -15,7 +15,10 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 
 # Add CA certificates for HTTPS (HA, etc.)
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN rm -rf /var/lib/apt/lists/* \
+	&& apt-get update \
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
