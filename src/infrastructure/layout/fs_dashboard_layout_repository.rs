@@ -24,6 +24,9 @@ struct LayoutJson {
     /// Optional per-entity page assignment (1-based page index).
     #[serde(default)]
     entity_pages: HashMap<String, usize>,
+    /// Optional per-page ordering for entities in the current view.
+    #[serde(default)]
+    entity_order: HashMap<String, usize>,
 }
 
 impl FsDashboardLayoutRepository {
@@ -69,6 +72,7 @@ impl FsDashboardLayoutRepository {
             return Ok(LayoutJson {
                 visible,
                 entity_pages: HashMap::new(),
+                entity_order: HashMap::new(),
             });
         }
 
@@ -77,6 +81,7 @@ impl FsDashboardLayoutRepository {
             return Ok(LayoutJson {
                 visible: ids,
                 entity_pages: HashMap::new(),
+                entity_order: HashMap::new(),
             });
         }
 
@@ -125,6 +130,20 @@ impl DashboardLayoutRepository for FsDashboardLayoutRepository {
                 let clamped = if page == 0 { 1 } else { page };
                 (id, clamped)
             })
+            .collect();
+        self.save_raw(&layout).await
+    }
+
+    async fn load_entity_order(&self) -> AppResult<HashMap<String, usize>> {
+        let layout = self.load_raw().await?;
+        Ok(layout.entity_order)
+    }
+
+    async fn save_entity_order(&self, map: HashMap<String, usize>) -> AppResult<()> {
+        let mut layout = self.load_raw().await?;
+        layout.entity_order = map
+            .into_iter()
+            .map(|(id, order)| (id, order.max(1)))
             .collect();
         self.save_raw(&layout).await
     }

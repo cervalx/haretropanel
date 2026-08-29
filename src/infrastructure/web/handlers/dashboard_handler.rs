@@ -26,29 +26,46 @@ pub struct DashboardQuery {
 #[derive(Debug, Deserialize)]
 pub struct ToggleForm {
     pub entity_id: String,
+    #[serde(default)]
+    pub page: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BrightnessForm {
     pub entity_id: String,
     pub brightness_pct: u8,
+    #[serde(default)]
+    pub page: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RunScriptForm {
     pub entity_id: String,
+    #[serde(default)]
+    pub page: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MoveEntityForm {
+    pub entity_id: String,
+    #[serde(default)]
+    pub page: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ColorTempForm {
     pub entity_id: String,
     pub color_temp_kelvin: u16,
+    #[serde(default)]
+    pub page: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ColorForm {
     pub entity_id: String,
     pub rgb: String,
+    #[serde(default)]
+    pub page: Option<usize>,
 }
 
 pub async fn get_dashboard(
@@ -63,12 +80,18 @@ pub async fn get_dashboard(
         .get_dashboard_with_refresh(force_refresh)
         .await?;
     let entity_pages = state.dashboard_service.get_entity_pages().await?;
+    let entity_order = state.dashboard_service.get_entity_order().await?;
 
-    let vm =
-        DashboardPageViewModel::from_state_and_pages(dashboard_state, &entity_pages, requested_page);
+    let vm = DashboardPageViewModel::from_state_and_pages(
+        dashboard_state,
+        &entity_pages,
+        &entity_order,
+        requested_page,
+    );
 
     let template = DashboardTemplate {
         app_title: &state.app_title,
+        app_text_color: &state.app_text_color,
         entities: &vm.entities,
         current_page: vm.current_page,
         total_pages: vm.total_pages,
@@ -100,9 +123,11 @@ async fn serve_dashboard_websocket(
                 let snapshot = async {
                     let dashboard_state = state.dashboard_service.get_dashboard().await?;
                     let entity_pages = state.dashboard_service.get_entity_pages().await?;
+                    let entity_order = state.dashboard_service.get_entity_order().await?;
                     let vm = DashboardPageViewModel::from_state_and_pages(
                         dashboard_state,
                         &entity_pages,
+                        &entity_order,
                         requested_page,
                     );
                     serde_json::to_string(&vm)
@@ -143,7 +168,8 @@ pub async fn post_set_color_temp(
         .dashboard_service
         .set_color_temp(&id, form.color_temp_kelvin)
         .await?;
-    Ok(Redirect::to("/"))
+    let redirect_target = redirect_target_for_page(form.page);
+    Ok(Redirect::to(&redirect_target))
 }
 
 pub async fn post_set_color(
@@ -154,7 +180,8 @@ pub async fn post_set_color(
     let rgb = parse_hex_color(&form.rgb)?;
     info!("Setting color via POST /light/color: {} to #{:02x}{:02x}{:02x}", id.0, rgb[0], rgb[1], rgb[2]);
     state.dashboard_service.set_color(&id, rgb).await?;
-    Ok(Redirect::to("/"))
+    let redirect_target = redirect_target_for_page(form.page);
+    Ok(Redirect::to(&redirect_target))
 }
 
 fn parse_hex_color(raw: &str) -> AppResult<[u8; 3]> {
@@ -176,6 +203,10 @@ fn parse_hex_color(raw: &str) -> AppResult<[u8; 3]> {
     Ok([r, g, b])
 }
 
+fn redirect_target_for_page(page: Option<usize>) -> String {
+    format!("/?page={}&force_refresh=1", page.unwrap_or(1))
+}
+
 pub async fn post_toggle(
     State(state): State<AppState>,
     Form(form): Form<ToggleForm>,
@@ -185,7 +216,8 @@ pub async fn post_toggle(
 
     state.dashboard_service.toggle_entity(&id).await?;
 
-    Ok(Redirect::to("/"))
+    let redirect_target = redirect_target_for_page(form.page);
+    Ok(Redirect::to(&redirect_target))
 }
 
 pub async fn post_brightness(
@@ -200,7 +232,8 @@ pub async fn post_brightness(
         .set_brightness(&id, form.brightness_pct)
         .await?;
 
-    Ok(Redirect::to("/"))
+    let redirect_target = redirect_target_for_page(form.page);
+    Ok(Redirect::to(&redirect_target))
 }
 
 pub async fn post_run_script(
@@ -212,7 +245,78 @@ pub async fn post_run_script(
 
     state.dashboard_service.run_script(&id).await?;
 
-    Ok(Redirect::to("/"))
+    let redirect_target = redirect_target_for_page(form.page);
+    Ok(Redirect::to(&redirect_target))
+}
+
+pub async fn move_entity_up(
+    State(state): State<AppState>,
+    Form(form): Form<MoveEntityForm>,
+) -> AppResult<impl IntoResponse> {
+    let id = EntityId(form.entity_id.clone());
+    let entity_pages = state.dashboard_service.get_entity_pages().await?;
+    let page = entity_pages.get(&id.0).cloned().unwrap_or(1);
+
+    let dashboard_state = state.dashboard_service.get_dashboard().await?;
+    let mut page_ids: Vec<String> = dashboard_state
+        .entities
+        .into_iter()
+        .filter(|e| entity_pages.get(&e.id.0).cloned().unwrap_or(1) == page)
+        .map(|e| e.id.0)
+        .collect();
+
+    let current_index = page_ids
+        .iter()
+        .position(|entity_id| entity_id == &id.0)
+        .unwrap_or(0);
+    if current_index > 0 {
+        page_ids.swap(current_index, current_index - 1);
+    }
+
+    let entity_order = state.dashboard_service.get_entity_order().await?;
+    let mut new_order = entity_order.clone();
+    for (index, entity_id) in page_ids.iter().enumerate() {
+        new_order.insert(entity_id.clone(), index + 1);
+    }
+    state.dashboard_service.save_entity_order(new_order).await?;
+
+    let redirect_target = redirect_target_for_page(Some(page));
+    Ok(Redirect::to(&redirect_target))
+}
+
+pub async fn move_entity_down(
+    State(state): State<AppState>,
+    Form(form): Form<MoveEntityForm>,
+) -> AppResult<impl IntoResponse> {
+    let id = EntityId(form.entity_id.clone());
+    let entity_pages = state.dashboard_service.get_entity_pages().await?;
+    let page = entity_pages.get(&id.0).cloned().unwrap_or(1);
+
+    let dashboard_state = state.dashboard_service.get_dashboard().await?;
+    let mut page_ids: Vec<String> = dashboard_state
+        .entities
+        .into_iter()
+        .filter(|e| entity_pages.get(&e.id.0).cloned().unwrap_or(1) == page)
+        .map(|e| e.id.0)
+        .collect();
+
+    let current_index = page_ids
+        .iter()
+        .position(|entity_id| entity_id == &id.0)
+        .unwrap_or(0);
+    if current_index + 1 < page_ids.len() {
+        page_ids.swap(current_index, current_index + 1);
+    }
+
+    let entity_order = state.dashboard_service.get_entity_order().await?;
+    let mut new_order = entity_order.clone();
+    for (index, entity_id) in page_ids.iter().enumerate() {
+        new_order.insert(entity_id.clone(), index + 1);
+    }
+    state.dashboard_service.save_entity_order(new_order).await?;
+
+    let redirect_target = redirect_target_for_page(Some(page));
+    Ok(Redirect::to(&redirect_target))
 }
 
 pub async fn get_redirect_to_root() -> impl IntoResponse {

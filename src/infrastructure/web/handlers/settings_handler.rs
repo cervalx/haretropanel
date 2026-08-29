@@ -47,6 +47,7 @@ pub async fn get_entity_settings(
 
     let template = EntitiesSettingsTemplate {
         app_title: &state.app_title,
+        app_text_color: &state.app_text_color,
         entities: &vm.entities,
     };
 

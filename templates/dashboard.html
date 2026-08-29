@@ -36,12 +36,28 @@
 <div class="grid">
     {% for entity in entities %}
     <div class="card" data-entity-id="{{ entity.id }}">
+        <div class="card-move-controls">
+            <form method="post" action="/entity/move_up" style="display: inline;">
+                <input type="hidden" name="entity_id" value="{{ entity.id }}">
+                <input type="hidden" name="page" value="{{ current_page }}">
+                <button type="submit" class="move-btn" aria-label="Move up">↑</button>
+            </form>
+            <form method="post" action="/entity/move_down" style="display: inline;">
+                <input type="hidden" name="entity_id" value="{{ entity.id }}">
+                <input type="hidden" name="page" value="{{ current_page }}">
+                <button type="submit" class="move-btn" aria-label="Move down">↓</button>
+            </form>
+        </div>
         <h2 class="card-title">{{ entity.name }}</h2>
 
         <p class="card-meta">Type: {{ entity.kind_label }}</p>
 
         {% if entity.has_value %}
-        <p class="card-value" data-value>Value: {{ entity.value }}</p>
+            {% if entity.kind_label == "Scene" %}
+            <p class="card-value" data-value>Last activated: {{ entity.value }}</p>
+            {% else %}
+            <p class="card-value" data-value>Value: {{ entity.value }}</p>
+            {% endif %}
         {% else %}
         <p class="card-value" data-value>
             Value:
@@ -52,6 +68,7 @@
         {% if entity.can_toggle %}
         <form method="post" action="/toggle" style="margin-top: 0.5rem;">
             <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <input type="hidden" name="page" value="{{ current_page }}">
             <button type="submit" class="btn">
                 Toggle
             </button>
@@ -61,6 +78,7 @@
         {% if let Some(brightness_pct) = entity.brightness_pct %}
         <form method="post" action="/brightness" style="margin-top: 0.5rem;" data-brightness-form>
             <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <input type="hidden" name="page" value="{{ current_page }}">
             <label for="brightness-{{ entity.id }}" data-brightness-label>Brightness: {{ brightness_pct }}%</label>
             <input
                 id="brightness-{{ entity.id }}"
@@ -81,6 +99,7 @@
         {% if entity.supports_color_temp %}
         <form method="post" action="/light/color_temp" style="margin-top: 0.5rem;" data-color-temp-form>
             <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <input type="hidden" name="page" value="{{ current_page }}">
             <label for="color-temp-{{ entity.id }}" data-color-temp-label>
                 Color temp: {{ entity.color_temp_kelvin.unwrap_or(entity.min_color_temp_kelvin.unwrap_or(2500)) }}K
             </label>
@@ -103,6 +122,7 @@
         {% if entity.supports_rgb %}
         <form method="post" action="/light/color" style="margin-top: 0.75rem;" data-color-form hidden>
             <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <input type="hidden" name="page" value="{{ current_page }}">
             <input type="hidden" name="rgb" data-color-value value="{{ entity.rgb_hex }}">
             <div class="color-picker-wrap" data-color-picker data-entity-id="{{ entity.id }}">
                 <canvas
@@ -124,8 +144,9 @@
         {% if entity.can_run_script %}
         <form method="post" action="/run_script" style="margin-top: 0.5rem;">
             <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            <input type="hidden" name="page" value="{{ current_page }}">
             <button type="submit" class="btn">
-                Run
+                {{ entity.action_label }}
             </button>
         </form>
         {% endif %}

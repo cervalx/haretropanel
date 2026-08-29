@@ -35,6 +35,7 @@ pub async fn run(config: AppConfig) -> AppResult<()> {
     let state = AppState {
         dashboard_service,
         app_title: config.app_title.clone(),
+        app_text_color: config.app_text_color.clone(),
     };
 
     let app = build_router(state);

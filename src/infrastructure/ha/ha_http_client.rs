@@ -58,6 +58,8 @@ impl HaHttpClient {
             EntityKind::Climate
         } else if entity_id.starts_with("script.") {
             EntityKind::Script
+        } else if entity_id.starts_with("scene.") {
+            EntityKind::Scene
         } else {
             EntityKind::Sensor
         }
@@ -69,6 +71,7 @@ impl HaHttpClient {
             EntityKind::Climate => matches!(state, "heat" | "cool" | "heat_cool" | "auto"),
             EntityKind::Sensor => matches!(state, "on" | "open" | "home" | "above_horizon"),
             EntityKind::Script => state == "on",
+            EntityKind::Scene => !state.is_empty() && state != "off",
         }
     }
 
@@ -82,6 +85,13 @@ impl HaHttpClient {
                 }
             }
             EntityKind::Script => Some(state.to_string()),
+            EntityKind::Scene => {
+                if state.is_empty() || state == "off" {
+                    Some("Not activated".to_string())
+                } else {
+                    Some(format!("Last activated: {state}"))
+                }
+            }
             EntityKind::Light | EntityKind::Switch => None,
         }
     }
@@ -138,6 +148,18 @@ impl HaHttpClient {
             min_color_temp_kelvin,
             max_color_temp_kelvin,
             rgb_color,
+        }
+    }
+
+    fn service_for_entity_action(entity_id: &str) -> AppResult<(&str, &str)> {
+        if entity_id.starts_with("script.") {
+            Ok(("script", "turn_on"))
+        } else if entity_id.starts_with("scene.") {
+            Ok(("scene", "turn_on"))
+        } else {
+            Err(AppError::Internal(format!(
+                "run_script called with non-script entity_id: {entity_id}"
+            )))
         }
     }
 
@@ -267,15 +289,27 @@ impl HomeAssistantClient for HaHttpClient {
 
     async fn run_script(&self, entity_id: &EntityId) -> AppResult<()> {
         let id_str = &entity_id.0;
-
-        if !id_str.starts_with("script.") {
-            return Err(AppError::Internal(format!(
-                "run_script called with non-script entity_id: {id_str}"
-            )));
-        }
+        let (domain, service) = Self::service_for_entity_action(id_str)?;
 
         let body = serde_json::json!({ "entity_id": id_str });
 
-        self.call_service("script", "turn_on", body).await
+        self.call_service(domain, service, body).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HaHttpClient;
+
+    #[test]
+    fn scene_entity_uses_scene_turn_on_service() {
+        let result = HaHttpClient::service_for_entity_action("scene.sexy_time").unwrap();
+        assert_eq!(result, ("scene", "turn_on"));
+    }
+
+    #[test]
+    fn script_entity_uses_script_turn_on_service() {
+        let result = HaHttpClient::service_for_entity_action("script.my_script").unwrap();
+        assert_eq!(result, ("script", "turn_on"));
     }
 }

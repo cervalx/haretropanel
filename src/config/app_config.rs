@@ -8,6 +8,7 @@ pub struct AppConfig {
     pub ha_base_url: String,
     pub ha_token: Option<String>,
     pub app_title: String,
+    pub app_text_color: String,
 
     // logging
     pub log_dir: String,
@@ -45,6 +46,9 @@ impl AppConfig {
 
         let app_title = env::var("HARETROPANEL_TITLE")
             .unwrap_or_else(|_| "HARetroPanel - Home Assistant panel".to_string());
+
+        let app_text_color = env::var("HARETROPANEL_TEXT_COLOR")
+            .unwrap_or_else(|_| "#f0f0f0".to_string());
 
         let log_dir = env::var("HARETROPANEL_LOG_DIR")
             .unwrap_or_else(|_| "./logs".to_string());
@@ -100,6 +104,7 @@ impl AppConfig {
             ha_base_url,
             ha_token,
             app_title,
+            app_text_color,
             log_dir,
             log_rotation,
             log_level,
@@ -127,6 +132,20 @@ mod tests {
         match previous {
             Some(value) => std::env::set_var("HARETROPANEL_TITLE", value),
             None => std::env::remove_var("HARETROPANEL_TITLE"),
+        }
+    }
+
+    #[test]
+    fn text_color_respects_environment_override() {
+        let previous = std::env::var("HARETROPANEL_TEXT_COLOR").ok();
+        std::env::set_var("HARETROPANEL_TEXT_COLOR", "#00ff00");
+
+        let config = AppConfig::from_env().unwrap();
+        assert_eq!(config.app_text_color, "#00ff00");
+
+        match previous {
+            Some(value) => std::env::set_var("HARETROPANEL_TEXT_COLOR", value),
+            None => std::env::remove_var("HARETROPANEL_TEXT_COLOR"),
         }
     }
 }

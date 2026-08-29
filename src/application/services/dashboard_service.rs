@@ -20,6 +20,9 @@ pub trait DashboardLayoutRepository: Send + Sync {
 
     async fn load_entity_pages(&self) -> AppResult<HashMap<String, usize>>;
     async fn save_entity_pages(&self, map: HashMap<String, usize>) -> AppResult<()>;
+
+    async fn load_entity_order(&self) -> AppResult<HashMap<String, usize>>;
+    async fn save_entity_order(&self, map: HashMap<String, usize>) -> AppResult<()>;
 }
 
 #[derive(Clone, Debug)]
@@ -63,7 +66,7 @@ impl DashboardService {
             EntityKind::Light => self.cache_config.light_ttl_secs.unwrap_or(self.cache_config.default_ttl_secs),
             EntityKind::Switch => self.cache_config.switch_ttl_secs.unwrap_or(self.cache_config.default_ttl_secs),
             EntityKind::Sensor => self.cache_config.sensor_ttl_secs.unwrap_or(self.cache_config.default_ttl_secs),
-            EntityKind::Climate | EntityKind::Script => {
+            EntityKind::Climate | EntityKind::Script | EntityKind::Scene => {
                 self.cache_config.climate_ttl_secs.unwrap_or(self.cache_config.default_ttl_secs)
             }
         }
@@ -167,6 +170,14 @@ impl DashboardService {
 
     pub async fn save_entity_pages(&self, map: HashMap<String, usize>) -> AppResult<()> {
         self.layout_repo.save_entity_pages(map).await
+    }
+
+    pub async fn get_entity_order(&self) -> AppResult<HashMap<String, usize>> {
+        self.layout_repo.load_entity_order().await
+    }
+
+    pub async fn save_entity_order(&self, map: HashMap<String, usize>) -> AppResult<()> {
+        self.layout_repo.save_entity_order(map).await
     }
 
     pub async fn toggle_entity(&self, id: &EntityId) -> AppResult<()> {

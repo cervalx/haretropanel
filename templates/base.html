@@ -8,7 +8,7 @@
     <style>
         body {
             background: #111;
-            color: #f0f0f0;
+            color: {{ app_text_color }};
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0.5rem;
@@ -122,6 +122,26 @@
             transition: transform 0.1s ease-out;
         }
 
+        .card-move-controls {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .move-btn {
+            background: rgba(60, 60, 60, 0.8);
+            border: 1px solid rgba(255,255,255,0.05);
+            color: {{ app_text_color }};
+            border-radius: 6px;
+            width: 2rem;
+            height: 2rem;
+            line-height: 1;
+            padding: 0;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
         .card:active {
             transform: scale(0.97);
         }
@@ -129,7 +149,7 @@
         .card-title {
             margin-top: 0;
             font-size: 1.4rem;
-            color: #fff;
+            color: {{ app_text_color }};
         }
 
         .card-meta {
@@ -146,7 +166,7 @@
             border: 1px solid rgba(255,255,255,0.05);
             padding: 0.4rem 0.8rem;
             border-radius: 8px;
-            color: white;
+            color: {{ app_text_color }};
             font-size: 1rem;
             cursor: pointer;
             width: 100%;
@@ -208,7 +228,7 @@
             border: 1px solid rgba(255,255,255,0.08);
             padding: 0.4rem;
             text-align: left;
-            color: white;
+            color: {{ app_text_color }};
         }
 
         th {

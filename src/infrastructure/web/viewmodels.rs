@@ -22,6 +22,7 @@ pub struct EntityViewModel {
     pub supports_rgb: bool,
     pub rgb_hex: String,
     pub can_run_script: bool,
+    pub action_label: String,
 }
 
 impl From<&Entity> for EntityViewModel {
@@ -32,6 +33,7 @@ impl From<&Entity> for EntityViewModel {
             EntityKind::Sensor => "Sensor",
             EntityKind::Climate => "Climate",
             EntityKind::Script => "Script",
+            EntityKind::Scene => "Scene",
         }
         .to_string();
 
@@ -52,7 +54,8 @@ impl From<&Entity> for EntityViewModel {
             .rgb_color
             .map(|[r, g, b]| format!("#{:02x}{:02x}{:02x}", r, g, b))
             .unwrap_or_else(|| "#ffffff".to_string());
-        let can_run_script = matches!(e.kind, EntityKind::Script);
+        let can_run_script = matches!(e.kind, EntityKind::Script | EntityKind::Scene);
+        let action_label = if matches!(e.kind, EntityKind::Scene) { "Activate".to_string() } else { "Run".to_string() };
 
         Self {
             id: e.id.to_string(),
@@ -70,6 +73,7 @@ impl From<&Entity> for EntityViewModel {
             supports_rgb,
             rgb_hex,
             can_run_script,
+            action_label,
         }
     }
 }
@@ -85,25 +89,32 @@ impl DashboardPageViewModel {
     pub fn from_state_and_pages(
         state: DashboardState,
         entity_pages: &HashMap<String, usize>,
+        entity_order: &HashMap<String, usize>,
         requested_page: usize,
     ) -> Self {
-        let items: Vec<(usize, EntityViewModel)> = state
+        let mut items: Vec<(usize, usize, EntityViewModel)> = state
             .entities
             .iter()
             .map(|e| {
                 let id = e.id.to_string();
                 let page = entity_pages.get(&id).cloned().unwrap_or(1).max(1);
-                (page, EntityViewModel::from(e))
+                let order = entity_order.get(&id).cloned().unwrap_or(usize::MAX);
+                (page, order, EntityViewModel::from(e))
             })
             .collect();
 
-        let total_pages = items.iter().map(|(p, _)| *p).max().unwrap_or(1);
+        items.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then(a.1.cmp(&b.1))
+        });
+
+        let total_pages = items.iter().map(|(p, _, _)| *p).max().unwrap_or(1);
         let page = requested_page.clamp(1, total_pages);
 
         let entities = items
             .into_iter()
-            .filter(|(p, _)| *p == page)
-            .map(|(_, vm)| vm)
+            .filter(|(p, _, _)| *p == page)
+            .map(|(_, _, vm)| vm)
             .collect();
 
         Self {
@@ -118,6 +129,7 @@ impl DashboardPageViewModel {
 #[template(path = "dashboard.html")]
 pub struct DashboardTemplate<'a> {
     pub app_title: &'a str,
+    pub app_text_color: &'a str,
     pub entities: &'a [EntityViewModel],
     pub current_page: usize,
     pub total_pages: usize,
@@ -139,6 +151,7 @@ pub struct EntitiesSettingsPageViewModel {
 #[template(path = "entities_settings.html")]
 pub struct EntitiesSettingsTemplate<'a> {
     pub app_title: &'a str,
+    pub app_text_color: &'a str,
     pub entities: &'a [EntitySettingsViewModel],
 }
 
@@ -168,5 +181,27 @@ mod tests {
         assert_eq!(view.color_temp_kelvin, Some(3000));
         assert!(view.supports_rgb);
         assert_eq!(view.rgb_hex, "#ff8040");
+    }
+
+    #[test]
+    fn scene_view_model_uses_activation_button() {
+        let scene = Entity {
+            id: crate::domain::EntityId("scene.movie_night".to_string()),
+            name: "Movie Night".to_string(),
+            kind: EntityKind::Scene,
+            is_on: false,
+            value: None,
+            brightness: None,
+            color_temp_kelvin: None,
+            min_color_temp_kelvin: None,
+            max_color_temp_kelvin: None,
+            rgb_color: None,
+        };
+
+        let view = EntityViewModel::from(&scene);
+
+        assert_eq!(view.kind_label, "Scene");
+        assert!(view.can_run_script);
+        assert_eq!(view.action_label, "Activate");
     }
 }
